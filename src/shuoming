@@ -1,0 +1,9 @@
+sequencediagrams (http://bramp.github.io/js-sequence-diagrams/):
+ - http://underscorejs.org/ (https://github.com/jashkenas/underscore)
+ - http://raphaeljs.com/
+ 
+
+flowchart (http://adrai.github.io/flowchart.js/)
+ - http://raphaeljs.com/
+ 
+flowchart的画图参数可以分离出来
