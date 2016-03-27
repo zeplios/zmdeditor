@@ -71,6 +71,7 @@ block.paragraph = replace(block.paragraph)
  */
 block.sequencediagrams = /^ *```[\s]*sequenceDiagram[\s]+([\s\S]+)```/;
 block.flowchart = /^ *```[\s]*flowChart[\s]+([\s\S]+)```/;
+block.katex = /^ *```[\s]*katex[\s]+([\s\S]+)```/;
 /**
  * =======================================================
  * zmdeditor end
@@ -201,6 +202,17 @@ Lexer.prototype.token = function(src, top, bq) {
       src = src.substring(cap[0].length);
       this.tokens.push({
         type: 'flowchart',
+        text: cap[1]
+      });
+      continue;
+    }
+    
+    // flow chart, must be in front of code
+    if (cap = this.rules.katex.exec(src)) {
+      // Top-level should never reach here.
+      src = src.substring(cap[0].length);
+      this.tokens.push({
+        type: 'katex',
         text: cap[1]
       });
       continue;
@@ -944,7 +956,7 @@ Renderer.prototype.sequencediagrams = function(text) {
 	return $('<div></div>').append($container.clone()).html();
 }
 Renderer.prototype.flowchart = function(text) {
-	try {
+  try {
 		var diagram = flowchart.parse(text);
 		var $container = $('<div id="zmd-inner-flowchart" style="display:none;"></div>');
 		$('body').append($container);
@@ -988,10 +1000,18 @@ Renderer.prototype.flowchart = function(text) {
 		var ret = $container.html();
 		$container.remove();
 		return ret;
-	} catch (e) {
-		console.log(e);
-		return '';
-	}
+  } catch (e) {
+    return text;
+  }
+}
+
+Renderer.prototype.katex = function(text) {
+  try {
+    return katex.renderToString(text);
+  } catch (e) {
+    return text;
+  }
+  
 }
 // ================================================= end
 
@@ -1180,6 +1200,9 @@ Parser.prototype.tok = function() {
     case 'flowchart': {
 	    return this.renderer.flowchart(this.token.text);
 	}
+    case 'katex': {
+      return this.renderer.katex(this.token.text);
+  }
     // ======================================== end
   }
 };
@@ -1399,14 +1422,16 @@ if (typeof module !== 'undefined' && typeof exports === 'object') {
 $.fn.zmdEditor = function(options) {
 	var contentName = (options.contentName) ? options.contentName : "zmd-content";
 	var contentId = (options.contentId) ? options.contentId : "zmd-content";
+
+  var panel_width = $(this).width() / 2;
 	
-	var $zmd_inner_editor = $('<div id="zmd-inner-container"></div>');
+	var $zmd_inner_editor = $('<div id="zmd-inner-container" class="zmd-inner-container"></div>');
 	var $zmd_inner_content = $('<textarea name="' + contentName + '" id="' + contentId + '" class="zmd-inner-content"></textarea>');
 	var $zmd_inner_preview = $('<div id="zmd-inner-preview" class="zmd-inner-preview"></div>');
 	$zmd_inner_editor.append($zmd_inner_content);
 	$zmd_inner_editor.append($zmd_inner_preview);
 
-	var $zmd_inner_actions = $('<div id="zmd-inner-container"></div>');
+	var $zmd_inner_actions = $('<div id="zmd-inner-actions"></div>');
 	zmd_inner_fillActions($zmd_inner_actions);
 	
 	$(this).append($zmd_inner_actions);
@@ -1528,8 +1553,10 @@ $.fn.zmdEditor = function(options) {
 		$item.click(function() { zmd_inner_insert_list($zmd_inner_content, true); });
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="数学公式" onclick="alert(\'not supported\');">functions</i>');
-		// http://khan.github.io/KaTeX/
+		$item = $('<i class="material-icons" title="数学公式">functions</i>');
+		$item.click(function() {
+      zmd_inner_insert($zmd_inner_content, '```\nkatex\nc = \\pm\\sqrt{a^2 + b^2}\n```\n', '');
+    });
 		$zmd_inner_actions.append($item);
 		
 		$item = $('<i class="material-icons" title="流程图">show_chart</i>');
