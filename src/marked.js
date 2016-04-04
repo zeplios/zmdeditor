@@ -24,7 +24,10 @@ var block = {
   def: /^ *\[([^\]]+)\]: *<?([^\s>]+)>?(?: +["(]([^\n]+)[")])? *(?:\n+|$)/,
   table: noop,
   paragraph: /^((?:[^\n]+\n?(?!hr|heading|lheading|blockquote|tag|def))+)\n*/,
-  text: /^[^\n]+/
+  text: /^[^\n]+/, 
+  sequencediagrams: /^ *`{3}\s*sequenceDiagram\s+([\s\S]+?)`{3}/, 
+  flowchart: /^ *`{3}\s*flowChart\s+([\s\S]+?)`{3}/, 
+  katex: /^ *`{3}\s*katex\s+([\s\S]+?)`{3}/
 };
 
 block.bullet = /(?:[*+-]|\d+\.)/;
@@ -63,20 +66,6 @@ block.paragraph = replace(block.paragraph)
   ('tag', '<' + block._tag)
   ('def', block.def)
   ();
-
-/**
- * =======================================================
- * zmdeditor start
- * =======================================================
- */
-block.sequencediagrams = /^ *```[\s]*sequenceDiagram[\s]+([\s\S]+)```/;
-block.flowchart = /^ *```[\s]*flowChart[\s]+([\s\S]+)```/;
-block.katex = /^ *```[\s]*katex[\s]+([\s\S]+)```/;
-/**
- * =======================================================
- * zmdeditor end
- * =======================================================
- */
 
 /**
  * Normal Block Grammar
@@ -187,7 +176,6 @@ Lexer.prototype.token = function(src, top, bq) {
     // ========================================= start
     // sequence diagrams, must be in front of code
     if (cap = this.rules.sequencediagrams.exec(src)) {
-      // Top-level should never reach here.
       src = src.substring(cap[0].length);
       this.tokens.push({
         type: 'sequencediagrams',
@@ -198,7 +186,6 @@ Lexer.prototype.token = function(src, top, bq) {
     
     // flow chart, must be in front of code
     if (cap = this.rules.flowchart.exec(src)) {
-      // Top-level should never reach here.
       src = src.substring(cap[0].length);
       this.tokens.push({
         type: 'flowchart',
@@ -207,9 +194,7 @@ Lexer.prototype.token = function(src, top, bq) {
       continue;
     }
     
-    // flow chart, must be in front of code
     if (cap = this.rules.katex.exec(src)) {
-      // Top-level should never reach here.
       src = src.substring(cap[0].length);
       this.tokens.push({
         type: 'katex',
@@ -505,6 +490,8 @@ var inline = {
   reflink: /^!?\[(inside)\]\s*\[([^\]]*)\]/,
   nolink: /^!?\[((?:\[[^\]]*\]|[^\[\]])*)\]/,
   strong: /^__([\s\S]+?)__(?!_)|^\*\*([\s\S]+?)\*\*(?!\*)/,
+  mark: /^==([\s\S]+?)==(?!=)/,
+  underline: /^\+\+([\s\S]+?)\+\+(?!\+)/,
   em: /^\b_((?:[^_]|__)+?)_\b|^\*((?:\*\*|[\s\S])+?)\*(?!\*)/,
   code: /^(`+)\s*([\s\S]*?[^`])\s*\1(?!`)/,
   br: /^ {2,}\n(?!\s*$)/,
@@ -696,7 +683,21 @@ InlineLexer.prototype.output = function(src) {
     // strong
     if (cap = this.rules.strong.exec(src)) {
       src = src.substring(cap[0].length);
-      out += this.renderer.strong(this.output(cap[2] || cap[1]));
+      out += this.renderer.strong(this.output(cap[1]));
+      continue;
+    }
+
+    // mark
+    if (cap = this.rules.mark.exec(src)) {
+      src = src.substring(cap[0].length);
+      out += this.renderer.mark(this.output(cap[1]));
+      continue;
+    }
+
+    // underline
+    if (cap = this.rules.underline.exec(src)) {
+      src = src.substring(cap[0].length);
+      out += this.renderer.underline(this.output(cap[1]));
       continue;
     }
 
@@ -899,6 +900,14 @@ Renderer.prototype.strong = function(text) {
   return '<strong>' + text + '</strong>';
 };
 
+Renderer.prototype.mark = function(text) {
+  return '<mark>' + text + '</mark>';
+};
+
+Renderer.prototype.underline = function(text) {
+  return '<u>' + text + '</u>';
+};
+
 Renderer.prototype.em = function(text) {
   return '<em>' + text + '</em>';
 };
@@ -928,7 +937,13 @@ Renderer.prototype.link = function(href, title, text) {
       return '';
     }
   }
+  href = href.replace(/&quot;|&#39;/gi, '');
   var out = '<a href="' + href + '"';
+  console.log('testing: ' + href)
+  console.log(/^(?!javascript:|vbscript:|#)/.test(href));
+  if (/^(?!javascript:|vbscript:|#)/.test(href)) {
+    out += ' target="__blank"';
+  }
   if (title) {
     out += ' title="' + title + '"';
   }
@@ -952,7 +967,8 @@ Renderer.prototype.text = function(text) {
 // ================================================= start
 Renderer.prototype.sequencediagrams = function(text) {
 	$container = $('<div>' + text + '</div>');
-	$container.sequenceDiagram({theme: 'hand'});
+	// $container.sequenceDiagram({theme: 'hand'});
+  $container.sequenceDiagram();
 	return $('<div></div>').append($container.clone()).html();
 }
 Renderer.prototype.flowchart = function(text) {
@@ -963,13 +979,13 @@ Renderer.prototype.flowchart = function(text) {
 		diagram.drawSVG('zmd-inner-flowchart', {
             'x': 0,
             'y': 0,
-            'line-width': 3,
-            'line-length': 50,
+            'line-width': 2,
+            'line-length': 30,
             'text-margin': 10,
             'font-size': 14,
             'font-color': 'black',
             'line-color': 'black',
-            'element-color': 'black',
+            'element-color': 'rgb(108, 108, 108)',
             'fill': 'white',
             'yes-text': 'yes',
             'no-text': 'no',
@@ -979,7 +995,7 @@ Renderer.prototype.flowchart = function(text) {
             'symbols': {
               'start': {
                 'font-color': 'red',
-                'element-color': 'green',
+                'element-color': 'rgb(108, 108, 108)',
                 'fill': 'yellow'
               },
               'end':{
@@ -989,8 +1005,8 @@ Renderer.prototype.flowchart = function(text) {
             // even flowstate support ;-)
             'flowstate' : {
               'past' : { 'fill' : '#CCCCCC', 'font-size' : 12},
-              'current' : {'fill' : 'yellow', 'font-color' : 'red', 'font-weight' : 'bold'},
-              'future' : { 'fill' : '#FFFF99'},
+              'current' : {'fill' : 'rgb(236, 236, 255)', 'font-color' : 'red', 'font-weight' : 'bold'},
+              'future' : { 'fill' : 'rgb(236, 236, 255)'},
               'request' : { 'fill' : 'blue'},
               'invalid': {'fill' : '#444444'},
               'approved' : { 'fill' : '#58C4A3', 'font-size' : 12, 'yes-text' : 'APPROVED', 'no-text' : 'n/a' },
@@ -1425,141 +1441,151 @@ $.fn.zmdEditor = function(options) {
 
   var panel_width = $(this).width() / 2;
 	
-	var $zmd_inner_editor = $('<div id="zmd-inner-container" class="zmd-inner-container"></div>');
+	var $zmd_inner_editor = $('<div id="zmd-inner-editor" class="zmd-inner-editor"></div>');
 	var $zmd_inner_content = $('<textarea name="' + contentName + '" id="' + contentId + '" class="zmd-inner-content"></textarea>');
-	var $zmd_inner_preview = $('<div id="zmd-inner-preview" class="zmd-inner-preview"></div>');
+	var $zmd_inner_preview = $('<div id="zmd-inner-preview" class="zmd-outer-content"></div>');
 	$zmd_inner_editor.append($zmd_inner_content);
 	$zmd_inner_editor.append($zmd_inner_preview);
 
-	var $zmd_inner_actions = $('<div id="zmd-inner-actions"></div>');
+	var $zmd_inner_actions = $('<div id="zmd-inner-actions" class="zmd-inner-actions"></div>');
 	zmd_inner_fillActions($zmd_inner_actions);
 	
 	$(this).append($zmd_inner_actions);
 	$(this).append($zmd_inner_editor);
 	
+  marked.setOptions({
+    highlight: function (code) {
+        return hljs.highlightAuto(code).value;
+    },
+  });
 	$('#' + contentId).on('keyup', function() {
 		$('#zmd-inner-preview').html(marked($(this).val()));
 	});
 
 	function zmd_inner_fillActions($zmd_inner_actions) {
-		var $item = $('<i class="material-icons" title="粗体">format_bold</i>');
+		var $item = $('<button><i class="material-icons" title="粗体">format_bold</i></button>');
 		$item.click(function() {
 			zmd_inner_insert($zmd_inner_content, "**", "**");
 		});
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="斜体">format_italic</i>');
+		$item = $('<button><i class="material-icons" title="斜体">format_italic</i></button>');
 		$item.click(function() {
 			zmd_inner_insert($zmd_inner_content, "*", "*");
 		});
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="删除线">format_strikethrough</i>');
+		$item = $('<button><i class="material-icons" title="删除线">format_strikethrough</i></button>');
 		$item.click(function() {
 			zmd_inner_insert($zmd_inner_content, "~~", "~~");
 		});
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="引用">format_quote</i>');
+    $item = $('<button><i class="material-icons" title="下划线">format_underlined</i></button>');
+    $item.click(function() { zmd_inner_insert($zmd_inner_content, "++", "++"); });
+    $zmd_inner_actions.append($item);
+
+    $item = $('<button><i class="material-icons" title="高亮">highlight</i></button>');
+    $item.click(function() { zmd_inner_insert($zmd_inner_content, "==", "=="); });
+    $zmd_inner_actions.append($item);
+
+		$item = $('<button><i class="material-icons" title="引用">format_quote</i></button>');
 		$item.click(function() {
 			zmd_inner_insert($zmd_inner_content, "\n>", "");
 		});
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="行内代码">code</i>');
+		$item = $('<button><i class="material-icons" title="行内代码">code</i></button>');
 		$item.click(function() {
 			zmd_inner_insert($zmd_inner_content, "`", "`");
 		});
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="代码块">developer_mode</i>');
+		$item = $('<button><i class="material-icons" title="代码块">developer_mode</i></button>');
 		$item.click(function() {
 			zmd_inner_insert_linestart($zmd_inner_content, "    ");
 		});
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="表格">grid_on</i>');
+		$item = $('<button><i class="material-icons" title="表格">grid_on</i></button>');
 		$item.click(function() {
 			zmd_inner_insert($zmd_inner_content, "\nheader 1 | header 2\n---|---\nrow 1 col 1 | row 1 col 2\nrow 2 col 1 | row 2 col 2\n\n", "");
 		});
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<span title="仅首字母大写">Aa</span>');
+		$item = $('<button><span title="仅首字母大写">Aa</span></button></button>');
 		$item.click(function() {
 			zmd_inner_selection_case($zmd_inner_content, 3);
 		});
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<span title="选中部分全部转为大写">AA</span>');
+		$item = $('<button><span title="选中部分全部转为大写">AA</span></button>');
 		$item.click(function() {
 			zmd_inner_selection_case($zmd_inner_content, 1);
 		});
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<span title="选中部分全部转为小写">aa</span>');
+		$item = $('<button><span title="选中部分全部转为小写">aa</span></button>');
 		$item.click(function() {
 			zmd_inner_selection_case($zmd_inner_content, 2);
 		});
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title=插入图片">insert_photo</i>');
+		$item = $('<button><i class="material-icons" title=插入图片">insert_photo</i></button>');
 		$item.click(function() {
 			zmd_inner_insert($zmd_inner_content, "![image](https://github.com/fluidicon.png)", "");
 		});
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="h1">looks_one</i>');
+		$item = $('<button><i class="material-icons" title="h1">looks_one</i></button>');
 		$item.click(function() { zmd_inner_header($zmd_inner_content, 1); });
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="h2">looks_two</i>');
+		$item = $('<button><i class="material-icons" title="h2">looks_two</i></button>');
 		$item.click(function() { zmd_inner_header($zmd_inner_content, 2); });
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="h3">looks_3</i>');
+		$item = $('<button><i class="material-icons" title="h3">looks_3</i></button>');
 		$item.click(function() { zmd_inner_header($zmd_inner_content, 3); });
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="h4">looks_4</i>');
+		$item = $('<button><i class="material-icons" title="h4">looks_4</i></button>');
 		$item.click(function() { zmd_inner_header($zmd_inner_content, 4); });
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="h5">looks_5</i>');
+		$item = $('<button><i class="material-icons" title="h5">looks_5</i></button>');
 		$item.click(function() { zmd_inner_header($zmd_inner_content, 5); });
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="h6">looks_6</i>');
+		$item = $('<button><i class="material-icons" title="h6">looks_6</i></button>');
 		$item.click(function() { zmd_inner_header($zmd_inner_content, 6); });
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="横线">remove</i>');
+		$item = $('<button><i class="material-icons" title="横线">remove</i></button>');
 		$item.click(function() {
-			zmd_inner_insert_nl_if_not($zmd_inner_content);
 			zmd_inner_insert($zmd_inner_content, "\n---\n", "");
 		});
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="下划线" onclick="alert(\'not supported\');">format_underlined</i>');
+		$item = $('<button><i class="material-icons" title="超链接">insert_link</i></button>');
+    $item.click(function() { zmd_inner_insert($zmd_inner_content, '[example]("http://example.org")', ''); });
 		$zmd_inner_actions.append($item);
 
-		$item = $('<i class="material-icons" title="超链接" onclick="alert(\'not supported\');">insert_link</i>');
-		$zmd_inner_actions.append($item);
-
-		$item = $('<i class="material-icons" title="无序列表">format_list_bulleted</i>');
+		$item = $('<button><i class="material-icons" title="无序列表">format_list_bulleted</i></button>');
 		$item.click(function() { zmd_inner_insert_list($zmd_inner_content, false); });
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="有序列表">format_list_numbered</i>');
+		$item = $('<button><i class="material-icons" title="有序列表">format_list_numbered</i></button>');
 		$item.click(function() { zmd_inner_insert_list($zmd_inner_content, true); });
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="数学公式">functions</i>');
+		$item = $('<button><i class="material-icons" title="数学公式">functions</i></button>');
 		$item.click(function() {
       zmd_inner_insert($zmd_inner_content, '```\nkatex\nc = \\pm\\sqrt{a^2 + b^2}\n```\n', '');
     });
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="流程图">show_chart</i>');
+		$item = $('<button><i class="material-icons" title="流程图">show_chart</i></button>');
 		$item.click(function() {
 			zmd_inner_insert($zmd_inner_content, '```\n\
 flowChart\n\
@@ -1567,8 +1593,7 @@ st=>start: Start:>http://www.google.com[blank]\n\
 e=>end:>http://www.google.com\n\
 op1=>operation: My Operation\n\
 sub1=>subroutine: My Subroutine\n\
-cond=>condition: Yes\n\
-or No?:>http://www.google.com\n\
+cond=>condition: Yes or No?:>http://www.google.com\n\
 io=>inputoutput: catch something...\n\
 \n\
 st->op1->cond\n\
@@ -1578,7 +1603,7 @@ cond(no)->sub1(right)->op1\n\
 		});
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="时序图">short_text</i>');
+		$item = $('<button><i class="material-icons" title="时序图">short_text</i></button>');
 		$item.click(function() {
 			zmd_inner_insert($zmd_inner_content, '```\n\
 sequenceDiagram\n\
@@ -1590,48 +1615,32 @@ B->>A: Great!\n\
 		// http://bramp.github.io/js-sequence-diagrams/
 		$zmd_inner_actions.append($item);
 		
-		$item = $('<i class="material-icons" title="甘特图" onclick="alert(\'not supported\');">tune</i>');
+		$item = $('<button><i class="material-icons" title="甘特图" onclick="alert(\'not supported\');">tune</i></button>');
 		$zmd_inner_actions.append($item);
 	};
 	
 	function zmd_inner_insert_linestart($textarea, text) {
 		var jsObj = $textarea.get(0);
-	    var spos = jsObj.selectionStart;
-	    var textAreaTxt = $textarea.val(); //.replace(/\r\n|\r/g, '\n');
-	    var preTxt = textAreaTxt.substring(0, spos);
-	    
-	    var match = preTxt.match(/[\r\n]/gi);
-	    var npos;
-	    if (!match || match.length <= 0) {
-	    	npos = 0;
-	    } else {
-	    	npos = preTxt.lastIndexOf(match[match.length-1]) + 1;
-	    }
-	    
-    	$textarea.val(textAreaTxt.substring(0, npos) + text + textAreaTxt.substring(npos));
-    	
-    	jsObj.selectionEnd = spos + text.length;
-		jsObj.selectionStart = spos + text.length;
+    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
+    var textAreaTxt = $textarea.val(); //.replace(/\r\n|\r/g, '\n');
+    
+    var npos = spos;
+    while (npos > 0 && !isNewLineChar(textAreaTxt[npos-1])) npos--;
+    
+    jsObj.setSelectionRange(npos, npos);
+  	zmd_inner_replace_selection($textarea, text);
+    jsObj.setSelectionRange(spos + text.length, epos + text.length);
+
 		$textarea.keyup();
-	    $textarea.focus();
 	};
 	
 	function zmd_inner_insert($textarea, preText, sufText) {
 		var jsObj = $textarea.get(0);
-	    var spos = jsObj.selectionStart;
-	    var epos = jsObj.selectionEnd;
-	    var textAreaTxt = $textarea.val();
-	    if (spos == epos) {
-	    	$textarea.val(textAreaTxt.substring(0, spos) + preText + sufText + textAreaTxt.substring(spos));
-	    	jsObj.selectionEnd = spos + preText.length;
-	    } else {
-	    	$textarea.val(textAreaTxt.substring(0, spos) + preText + textAreaTxt.substring(spos, epos) 
-	    			+ sufText + textAreaTxt.substring(epos));
-	    	jsObj.selectionEnd = epos + preText.length;
-	    }
-		jsObj.selectionStart = spos + preText.length;
+    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
+    var textAreaTxt = $textarea.val();
+    zmd_inner_replace_selection($textarea, preText + textAreaTxt.substring(spos, epos) + sufText);
+    jsObj.setSelectionRange(spos + preText.length, epos + preText.length);
 		$textarea.keyup();
-	    $textarea.focus();
 	};
 	
 	function isNewLineChar(ch) {
@@ -1641,36 +1650,34 @@ B->>A: Great!\n\
 	function zmd_inner_insert_list($textarea, isOrdered) {
 		var insertCharNums = 0;
 		var jsObj = $textarea.get(0);
-	    var spos = jsObj.selectionStart;
-	    var epos = jsObj.selectionEnd;
-	    var textAreaTxt = $textarea.val();
+    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
+	  var textAreaTxt = $textarea.val();
 	    
-	    var idx = spos;
-	    while (idx > 0 && !isNewLineChar(textAreaTxt[idx-1])) {
-	    	idx--;
-	    }
-	    
-	    var resultText = textAreaTxt.substring(0, idx);
-	    if (idx == 0) {
-	    	++insertCharNums;
-	    	resultText += isOrdered ? insertCharNums + '. ' : '- ';
-	    	resultText += textAreaTxt[idx];
-	    	idx++;
-	    }
-	    while (idx < epos) {
-	    	if (!isNewLineChar(textAreaTxt[idx]) && isNewLineChar(textAreaTxt[idx-1])) {
-	    		++insertCharNums;
-    			resultText += isOrdered ? insertCharNums + '. ' : '- ';
-	    	}
-	    	resultText += textAreaTxt[idx];
-	    	idx++;
-	    }
-	    resultText += textAreaTxt.substring(idx);
-	    $textarea.val(resultText);
-	    jsObj.selectionStart = spos + (isOrdered ? 3 : 2);
-		jsObj.selectionEnd = epos + insertCharNums * (isOrdered ? 3 : 2);
+    var idx = spos;
+    while (idx > 0 && !isNewLineChar(textAreaTxt[idx-1])) idx--;
+    var npos1 = idx;
+    var resultText = '';
+
+	  if (idx == 0) {
+	  	++insertCharNums;
+	  	resultText += isOrdered ? insertCharNums + '. ' : '- ';
+	  	resultText += textAreaTxt[idx];
+	  	idx++;
+	  }
+	  while (idx < epos) {
+    	if (!isNewLineChar(textAreaTxt[idx]) && isNewLineChar(textAreaTxt[idx-1])) {
+    		++insertCharNums;
+  			resultText += isOrdered ? insertCharNums + '. ' : '- ';
+    	}
+    	resultText += textAreaTxt[idx];
+    	idx++;
+    }
+    var npos2 = idx;
+
+    jsObj.setSelectionRange(npos1, npos2);
+    zmd_inner_replace_selection($textarea, resultText);
+    jsObj.setSelectionRange(spos + (isOrdered ? 3 : 2), epos + insertCharNums * (isOrdered ? 3 : 2));
 		$textarea.keyup();
-	    $textarea.focus();
 	};
 	
 	/**
@@ -1678,20 +1685,16 @@ B->>A: Great!\n\
 	 */
 	function zmd_inner_selection_case($textarea, mode) {
 		var jsObj = $textarea.get(0);
-	    var spos = jsObj.selectionStart;
-	    var epos = jsObj.selectionEnd;
-	    var textAreaTxt = $textarea.val();
-	    switch (mode) {
-	    case 1: $textarea.val(textAreaTxt.substring(0, spos) + textAreaTxt.substring(spos, epos).toUpperCase() + textAreaTxt.substring(epos)); break;
-	    case 2: $textarea.val(textAreaTxt.substring(0, spos) + textAreaTxt.substring(spos, epos).toLowerCase() + textAreaTxt.substring(epos)); break;
-	    case 3: $textarea.val(textAreaTxt.substring(0, spos) + textAreaTxt.substring(spos, spos+1).toUpperCase() 
-	    							+ textAreaTxt.substring(spos+1, epos).toLowerCase() + textAreaTxt.substring(epos)); break;
-	    default: break;
-	    }
-	    jsObj.selectionStart = spos;
-	    jsObj.selectionEnd = epos;
+    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
+    var textAreaTxt = $textarea.val();
+    switch (mode) {
+    case 1: zmd_inner_replace_selection($textarea, textAreaTxt.substring(spos, epos).toUpperCase()); break;
+    case 2: zmd_inner_replace_selection($textarea, textAreaTxt.substring(spos, epos).toLowerCase()); break;
+    case 3: zmd_inner_replace_selection($textarea, textAreaTxt.substring(spos, spos+1).toUpperCase() + textAreaTxt.substring(spos+1, epos).toLowerCase()); break;
+    default: break;
+    }
+    jsObj.setSelectionRange(spos, epos);
 		$textarea.keyup();
-	    $textarea.focus();
 	};
 
 	function zmd_inner_header($textarea, level) {
@@ -1703,13 +1706,16 @@ B->>A: Great!\n\
 		zmd_inner_insert_linestart($textarea, text);
 	};
 
-	function zmd_inner_insert_nl_if_not($textarea) {
-		var jsObj = $textarea.get(0);
-	    var spos = jsObj.selectionStart;
-	    if (spos == 0 || $textarea.val()[spos-1] == '\r' || $textarea.val()[spos-1] == '\n') {
-	    	return;
-	    }
-	    zmd_inner_insert($textarea, '\n', '');
-	};
+  function zmd_inner_replace_selection($textarea, text) {
+    var jsObj = $textarea.get(0);
+    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
+    var textAreaTxt = $textarea.val();
+    $textarea.focus();
+    if (document.queryCommandSupported('insertText')) {
+        document.execCommand('insertText', false, text);
+    } else {
+        $textarea.val(textAreaTxt.substring(0, spos) + text + textAreaTxt.substring(epos));
+    }
+  }
 }
 
