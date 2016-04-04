@@ -1,6 +1,11 @@
 # zmdeditor
 modifier of marked.js
 
+marked.js的扩展，综合Editor.md（https://pandao.github.io/editor.md/）和Markdown Plus（https://github.com/tylingsoft/markdown-plus）的特性，更易与现有系统集成。
+
+正在开发中……
+
+
 # 用法
 
 1. 标题
@@ -116,3 +121,4 @@ modifier of marked.js
 [Raphael.js](https://github.com/DmitryBaranovskiy/raphael)
 
 [highlight](https://highlightjs.org/ "highlight")
+
