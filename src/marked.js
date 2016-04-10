@@ -25,9 +25,10 @@ var block = {
   table: noop,
   paragraph: /^((?:[^\n]+\n?(?!hr|heading|lheading|blockquote|tag|def))+)\n*/,
   text: /^[^\n]+/, 
-  sequencediagrams: /^ *`{3}\s*sequenceDiagram\s+([\s\S]+?)`{3}/, 
+  handseq: /^ *`{3}\s*handseq\s+([\s\S]+?)`{3}/, 
   flowchart: /^ *`{3}\s*flowChart\s+([\s\S]+?)`{3}/, 
-  katex: /^ *`{3}\s*katex\s+([\s\S]+?)`{3}/
+  katex: /^ *`{3}\s*katex\s+([\s\S]+?)`{3}/, 
+  mermaid: /^ *`{3}\s([\s\S]+?)`{3}/
 };
 
 block.bullet = /(?:[*+-]|\d+\.)/;
@@ -175,10 +176,10 @@ Lexer.prototype.token = function(src, top, bq) {
 
     // ========================================= start
     // sequence diagrams, must be in front of code
-    if (cap = this.rules.sequencediagrams.exec(src)) {
+    if (cap = this.rules.handseq.exec(src)) {
       src = src.substring(cap[0].length);
       this.tokens.push({
-        type: 'sequencediagrams',
+        type: 'handseq',
         text: cap[1]
       });
       continue;
@@ -198,6 +199,16 @@ Lexer.prototype.token = function(src, top, bq) {
       src = src.substring(cap[0].length);
       this.tokens.push({
         type: 'katex',
+        text: cap[1]
+      });
+      continue;
+    }
+
+    if (cap = this.rules.mermaid.exec(src)) {
+      console.log(cap[1]);
+      src = src.substring(cap[0].length);
+      this.tokens.push({
+        type: 'mermaid',
         text: cap[1]
       });
       continue;
@@ -496,7 +507,7 @@ var inline = {
   code: /^(`+)\s*([\s\S]*?[^`])\s*\1(?!`)/,
   br: /^ {2,}\n(?!\s*$)/,
   del: noop,
-  text: /^[\s\S]+?(?=[\\<!\[_*`]| {2,}\n|$)/
+  text: /^[\s\S]+?(?=[\\\+=<!\[_*`]| {2,}\n|$)/
 };
 
 inline._inside = /(?:\[[^\]]*\]|[^\[\]]|\](?=[^\[]*\]))*/;
@@ -683,7 +694,7 @@ InlineLexer.prototype.output = function(src) {
     // strong
     if (cap = this.rules.strong.exec(src)) {
       src = src.substring(cap[0].length);
-      out += this.renderer.strong(this.output(cap[1]));
+      out += this.renderer.strong(this.output(cap[1] || cap[2]));
       continue;
     }
 
@@ -939,8 +950,6 @@ Renderer.prototype.link = function(href, title, text) {
   }
   href = href.replace(/&quot;|&#39;/gi, '');
   var out = '<a href="' + href + '"';
-  console.log('testing: ' + href)
-  console.log(/^(?!javascript:|vbscript:|#)/.test(href));
   if (/^(?!javascript:|vbscript:|#)/.test(href)) {
     out += ' target="__blank"';
   }
@@ -965,7 +974,7 @@ Renderer.prototype.text = function(text) {
 };
 
 // ================================================= start
-Renderer.prototype.sequencediagrams = function(text) {
+Renderer.prototype.handseq = function(text) {
 	$container = $('<div>' + text + '</div>');
 	// $container.sequenceDiagram({theme: 'hand'});
   $container.sequenceDiagram();
@@ -1021,9 +1030,18 @@ Renderer.prototype.flowchart = function(text) {
   }
 }
 
+Renderer.prototype.mermaid = function(text) {
+  return '<div class="mermaid">'+text+'</div>'
+}
+
 Renderer.prototype.katex = function(text) {
   try {
-    return katex.renderToString(text);
+    var items = text.split(/\n{2,}/);
+    var out = '';
+    for (var i in items) {
+      out += katex.renderToString(items[i]);
+    }
+    return out;
   } catch (e) {
     return text;
   }
@@ -1210,14 +1228,17 @@ Parser.prototype.tok = function() {
     }
     
     // ======================================== start
-    case 'sequencediagrams': {
-	    return this.renderer.sequencediagrams(this.token.text);
+    case 'handseq': {
+	    return this.renderer.handseq(this.token.text);
 	}
     case 'flowchart': {
 	    return this.renderer.flowchart(this.token.text);
 	}
     case 'katex': {
       return this.renderer.katex(this.token.text);
+  }
+    case 'mermaid': {
+      return this.renderer.mermaid(this.token.text);
   }
     // ======================================== end
   }
@@ -1434,288 +1455,329 @@ if (typeof module !== 'undefined' && typeof exports === 'object') {
  * 功能点参考：https://pandao.github.io/editor.md/
  * ==========================================================
  */
+function ZmdEditor($this, options) {
+  var contentName = (options.contentName) ? options.contentName : "zmd-content";
+  var contentId = (options.contentId) ? options.contentId : "zmd-content";
+  
+  var $centerContent = $('<div id="zmd-inner-editor" class="zmd-inner-editor"></div>');
+  var $textarea = $('<textarea name="' + contentName + '" id="' + contentId + '" class="zmd-inner-content"></textarea>');
+  var $preview = $('<div id="zmd-inner-preview" class="zmd-outer-content"></div>');
+  $centerContent.append($textarea);
+  $centerContent.append($preview);
 
-$.fn.zmdEditor = function(options) {
-	var contentName = (options.contentName) ? options.contentName : "zmd-content";
-	var contentId = (options.contentId) ? options.contentId : "zmd-content";
+  this.textarea = $textarea[0];
+  this.preview = $preview[0];
+  this.typedSomething = true;
+  var _this = this;
 
-  var panel_width = $(this).width() / 2;
-	
-	var $zmd_inner_editor = $('<div id="zmd-inner-editor" class="zmd-inner-editor"></div>');
-	var $zmd_inner_content = $('<textarea name="' + contentName + '" id="' + contentId + '" class="zmd-inner-content"></textarea>');
-	var $zmd_inner_preview = $('<div id="zmd-inner-preview" class="zmd-outer-content"></div>');
-	$zmd_inner_editor.append($zmd_inner_content);
-	$zmd_inner_editor.append($zmd_inner_preview);
+  var $actionsBar = $('<div id="zmd-inner-actions" class="zmd-inner-actions"></div>');
+  this.fillActions($actionsBar);
+  
+  $this.append($actionsBar);
+  $this.append($centerContent);
 
-	var $zmd_inner_actions = $('<div id="zmd-inner-actions" class="zmd-inner-actions"></div>');
-	zmd_inner_fillActions($zmd_inner_actions);
-	
-	$(this).append($zmd_inner_actions);
-	$(this).append($zmd_inner_editor);
-	
+  this.initScroll();
+  
   marked.setOptions({
     highlight: function (code) {
         return hljs.highlightAuto(code).value;
     },
   });
-	$('#' + contentId).on('keyup', function() {
-		$('#zmd-inner-preview').html(marked($(this).val()));
-	});
+  $textarea.on('keyup', function() {
+    _this.typedSomething = true;
+    $preview.html(marked($(this).val()));
+    mermaid.init(undefined, ".mermaid");
+  });
+}
 
-	function zmd_inner_fillActions($zmd_inner_actions) {
-		var $item = $('<button><i class="material-icons" title="粗体">format_bold</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, "**", "**");
-		});
-		$zmd_inner_actions.append($item);
+ZmdEditor.prototype.initScroll = function() {
+  var _this = this;
+  var contentScrollTop = 0;
+  var previewScrollTop = 0;
+  var textarea = this.textarea;
+  var preview = this.preview;
+  $(textarea).scroll(function() {
+    var timeout = _this.typedSomething ? 500 : 100;
+    setTimeout(function() {
+      var per = (textarea.scrollTop - contentScrollTop) / (textarea.scrollHeight - textarea.clientHeight);
+      preview.scrollTop = per * (preview.scrollHeight - preview.clientHeight) + previewScrollTop;
+      contentScrollTop = textarea.scrollTop;
+      previewScrollTop = preview.scrollTop;
+      _this.typedSomething = false;
+    }, timeout);  // time for marked render
+  });
+  $(preview).scroll(function() {
+    var per = (preview.scrollTop - previewScrollTop) / (preview.scrollHeight - preview.clientHeight);
+    textarea.scrollTop = per * (textarea.scrollHeight - textarea.clientHeight) + contentScrollTop;
+    contentScrollTop = textarea.scrollTop;
+    previewScrollTop = preview.scrollTop;
+  });
+}
 
-		$item = $('<button><i class="material-icons" title="斜体">format_italic</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, "*", "*");
-		});
-		$zmd_inner_actions.append($item);
+ZmdEditor.prototype.fillActions = function($actionsBar) {
+  var _this = this;
+  var actions = [];
+  actions.push({
+    item: '<button><i class="material-icons" title="粗体">format_bold</i></button>', 
+    action: function() { _this.insert("**", "**"); }
+  });
 
-		$item = $('<button><i class="material-icons" title="删除线">format_strikethrough</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, "~~", "~~");
-		});
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><i class="material-icons" title="斜体">format_italic</i></button>', 
+    action: function() { _this.insert("*", "*"); }
+  });
 
-    $item = $('<button><i class="material-icons" title="下划线">format_underlined</i></button>');
-    $item.click(function() { zmd_inner_insert($zmd_inner_content, "++", "++"); });
-    $zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><i class="material-icons" title="删除线">format_strikethrough</i></button>', 
+    action: function() { _this.insert("~~", "~~"); }
+  });
 
-    $item = $('<button><i class="material-icons" title="高亮">highlight</i></button>');
-    $item.click(function() { zmd_inner_insert($zmd_inner_content, "==", "=="); });
-    $zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><i class="material-icons" title="下划线">format_underlined</i></button>', 
+    action: function() { _this.insert("++", "++"); }
+  });
 
-		$item = $('<button><i class="material-icons" title="引用">format_quote</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, "\n>", "");
-		});
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><i class="material-icons" title="行内代码">code</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, "`", "`");
-		});
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><i class="material-icons" title="代码块">developer_mode</i></button>');
-		$item.click(function() {
-			zmd_inner_insert_linestart($zmd_inner_content, "    ");
-		});
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><i class="material-icons" title="表格">grid_on</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, "\nheader 1 | header 2\n---|---\nrow 1 col 1 | row 1 col 2\nrow 2 col 1 | row 2 col 2\n\n", "");
-		});
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><span title="仅首字母大写">Aa</span></button></button>');
-		$item.click(function() {
-			zmd_inner_selection_case($zmd_inner_content, 3);
-		});
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><span title="选中部分全部转为大写">AA</span></button>');
-		$item.click(function() {
-			zmd_inner_selection_case($zmd_inner_content, 1);
-		});
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><span title="选中部分全部转为小写">aa</span></button>');
-		$item.click(function() {
-			zmd_inner_selection_case($zmd_inner_content, 2);
-		});
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><i class="material-icons" title="高亮">highlight</i></button>', 
+    action: function() { _this.insert("==", "=="); }
+  });
 
-		$item = $('<button><i class="material-icons" title=插入图片">insert_photo</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, "![image](https://github.com/fluidicon.png)", "");
-		});
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><i class="material-icons" title="引用">format_quote</i></button>', 
+    action: function() { _this.insert("\n>", ""); }
+  });
 
-		$item = $('<button><i class="material-icons" title="h1">looks_one</i></button>');
-		$item.click(function() { zmd_inner_header($zmd_inner_content, 1); });
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><i class="material-icons" title="行内代码">code</i></button>', 
+    action: function() { _this.insert("`", "`"); }
+  });
 
-		$item = $('<button><i class="material-icons" title="h2">looks_two</i></button>');
-		$item.click(function() { zmd_inner_header($zmd_inner_content, 2); });
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><i class="material-icons" title="代码块">developer_mode</i></button>', 
+    action: function() { _this.insertLineStart("    "); }
+  });
 
-		$item = $('<button><i class="material-icons" title="h3">looks_3</i></button>');
-		$item.click(function() { zmd_inner_header($zmd_inner_content, 3); });
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><i class="material-icons" title="表格">grid_on</i></button>', 
+    action: function() { _this.insert("\nheader 1 | header 2\n---|---\nrow 1 col 1 | row 1 col 2\nrow 2 col 1 | row 2 col 2\n\n", ""); }
+  });
 
-		$item = $('<button><i class="material-icons" title="h4">looks_4</i></button>');
-		$item.click(function() { zmd_inner_header($zmd_inner_content, 4); });
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><span title="仅首字母大写">Aa</span></button>', 
+    action: function() { _this.selectionCase(3); }
+  });
 
-		$item = $('<button><i class="material-icons" title="h5">looks_5</i></button>');
-		$item.click(function() { zmd_inner_header($zmd_inner_content, 5); });
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><span title="选中部分全部转为大写">AA</span></button>', 
+    action: function() { _this.selectionCase(1); }
+  });
 
-		$item = $('<button><i class="material-icons" title="h6">looks_6</i></button>');
-		$item.click(function() { zmd_inner_header($zmd_inner_content, 6); });
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><i class="material-icons" title="横线">remove</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, "\n---\n", "");
-		});
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><span title="选中部分全部转为小写">aa</span></button>', 
+    action: function() { _this.selectionCase(2); }
+  });
 
-		$item = $('<button><i class="material-icons" title="超链接">insert_link</i></button>');
-    $item.click(function() { zmd_inner_insert($zmd_inner_content, '[example]("http://example.org")', ''); });
-		$zmd_inner_actions.append($item);
+  actions.push({
+    item: '<button><i class="material-icons" title=插入图片">insert_photo</i></button>', 
+    action: function() { _this.insert("![image](https://github.com/fluidicon.png)", ""); }
+  });
 
-		$item = $('<button><i class="material-icons" title="无序列表">format_list_bulleted</i></button>');
-		$item.click(function() { zmd_inner_insert_list($zmd_inner_content, false); });
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><i class="material-icons" title="有序列表">format_list_numbered</i></button>');
-		$item.click(function() { zmd_inner_insert_list($zmd_inner_content, true); });
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><i class="material-icons" title="数学公式">functions</i></button>');
-		$item.click(function() {
-      zmd_inner_insert($zmd_inner_content, '```\nkatex\nc = \\pm\\sqrt{a^2 + b^2}\n```\n', '');
-    });
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><i class="material-icons" title="流程图">show_chart</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, '```\n\
-flowChart\n\
-st=>start: Start:>http://www.google.com[blank]\n\
-e=>end:>http://www.google.com\n\
-op1=>operation: My Operation\n\
-sub1=>subroutine: My Subroutine\n\
-cond=>condition: Yes or No?:>http://www.google.com\n\
-io=>inputoutput: catch something...\n\
-\n\
-st->op1->cond\n\
-cond(yes)->io->e\n\
-cond(no)->sub1(right)->op1\n\
-```\n', '');
-		});
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><i class="material-icons" title="时序图">short_text</i></button>');
-		$item.click(function() {
-			zmd_inner_insert($zmd_inner_content, '```\n\
-sequenceDiagram\n\
-A->>C: How are you?\n\
-B->>A: Great!\n\
-```\n', '');
-		});
+  actions.push({
+    item: '<button><i class="material-icons" title=h1">looks_one</i></button>', 
+    action: function() { _this.header(1); }
+  });
 
-		// http://bramp.github.io/js-sequence-diagrams/
-		$zmd_inner_actions.append($item);
-		
-		$item = $('<button><i class="material-icons" title="甘特图" onclick="alert(\'not supported\');">tune</i></button>');
-		$zmd_inner_actions.append($item);
-	};
-	
-	function zmd_inner_insert_linestart($textarea, text) {
-		var jsObj = $textarea.get(0);
-    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
-    var textAreaTxt = $textarea.val(); //.replace(/\r\n|\r/g, '\n');
-    
-    var npos = spos;
-    while (npos > 0 && !isNewLineChar(textAreaTxt[npos-1])) npos--;
-    
-    jsObj.setSelectionRange(npos, npos);
-  	zmd_inner_replace_selection($textarea, text);
-    jsObj.setSelectionRange(spos + text.length, epos + text.length);
+  actions.push({
+    item: '<button><i class="material-icons" title=h2">looks_two</i></button>', 
+    action: function() { _this.header(2); }
+  });
 
-		$textarea.keyup();
-	};
-	
-	function zmd_inner_insert($textarea, preText, sufText) {
-		var jsObj = $textarea.get(0);
-    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
-    var textAreaTxt = $textarea.val();
-    zmd_inner_replace_selection($textarea, preText + textAreaTxt.substring(spos, epos) + sufText);
-    jsObj.setSelectionRange(spos + preText.length, epos + preText.length);
-		$textarea.keyup();
-	};
-	
-	function isNewLineChar(ch) {
-		return ch == '\r' || ch == '\n';
-	}
-	
-	function zmd_inner_insert_list($textarea, isOrdered) {
-		var insertCharNums = 0;
-		var jsObj = $textarea.get(0);
-    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
-	  var textAreaTxt = $textarea.val();
-	    
-    var idx = spos;
-    while (idx > 0 && !isNewLineChar(textAreaTxt[idx-1])) idx--;
-    var npos1 = idx;
-    var resultText = '';
+  actions.push({
+    item: '<button><i class="material-icons" title=h3">looks_3</i></button>', 
+    action: function() { _this.header(3); }
+  });
 
-	  if (idx == 0) {
-	  	++insertCharNums;
-	  	resultText += isOrdered ? insertCharNums + '. ' : '- ';
-	  	resultText += textAreaTxt[idx];
-	  	idx++;
-	  }
-	  while (idx < epos) {
-    	if (!isNewLineChar(textAreaTxt[idx]) && isNewLineChar(textAreaTxt[idx-1])) {
-    		++insertCharNums;
-  			resultText += isOrdered ? insertCharNums + '. ' : '- ';
-    	}
-    	resultText += textAreaTxt[idx];
-    	idx++;
+  actions.push({
+    item: '<button><i class="material-icons" title=h4">looks_4</i></button>', 
+    action: function() { _this.header(4); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title=h5">looks_5</i></button>', 
+    action: function() { _this.header(5); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title=h6">looks_6</i></button>', 
+    action: function() { _this.header(6); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title="横线">remove</i></button>', 
+    action: function() { _this.insert("\n---\n", ""); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title="超链接">insert_link</i></button>', 
+    action: function() { _this.insert('[example]("http://example.org")', ''); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title="无序列表">format_list_bulleted</i></button>', 
+    action: function() { _this.insertList(false); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title="有序列表">format_list_numbered</i></button>', 
+    action: function() { _this.insertList(true); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title="数学公式">functions</i></button>', 
+    action: function() { _this.insert('```\nkatex\nc = \\pm\\sqrt{a^2 + b^2}\n```\n', ''); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title="流程图">show_chart</i></button>', 
+    action: function() { _this.insert('```\nflowChart\nst=>start: Start:>http://www.google.com[blank]\ne=>end:>http://www.google.com\nop1=>operation: My Operation\nsub1=>subroutine: My Subroutine\ncond=>condition: Yes or No?:>http://www.google.com\nio=>inputoutput: catch something...\n\nst->op1->cond\ncond(yes)->io->e\ncond(no)->sub1(right)->op1\n```\n', ''); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title="时序图">short_text</i></button>', 
+    action: function() { _this.insert('```\nhandseq\nA->>C: How are you?\nB->>A: Great!\n```\n', ''); }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title="甘特图" onclick="alert(\'not supported\');">tune</i></button>', 
+    action: function() {  }
+  });
+
+  actions.push({
+    item: '<button><i class="material-icons" title="下载PDF">file_download</i></button>', 
+    action: function() { 
+      $print = $('<div class="zmd-outer-content"></div>');
+      $print.html($(_this.preview).html());
+      $print.css('width', '100%');
+      var options = {
+        mode : 'popup', 
+        popClose : 'true', 
+        popWd: $('body').width()*0.8 + 'px',
+        popX: $('body').width()*0.1 + 'px',
+        popY: '100px', 
+        retainAttr: ['id', 'class', 'style'], 
+        extraHead: '<meta charset="utf-8" />,<meta http-equiv="X-UA-Compatible" content="IE=edge"/>'
+      }
+      $print.printArea(options); 
     }
-    var npos2 = idx;
+  });
 
-    jsObj.setSelectionRange(npos1, npos2);
-    zmd_inner_replace_selection($textarea, resultText);
-    jsObj.setSelectionRange(spos + (isOrdered ? 3 : 2), epos + insertCharNums * (isOrdered ? 3 : 2));
-		$textarea.keyup();
-	};
-	
-	/**
-	 * mode = 1: toUpper; mode = 2: toLower; mode = 3: first toUpper
-	 */
-	function zmd_inner_selection_case($textarea, mode) {
-		var jsObj = $textarea.get(0);
-    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
-    var textAreaTxt = $textarea.val();
-    switch (mode) {
-    case 1: zmd_inner_replace_selection($textarea, textAreaTxt.substring(spos, epos).toUpperCase()); break;
-    case 2: zmd_inner_replace_selection($textarea, textAreaTxt.substring(spos, epos).toLowerCase()); break;
-    case 3: zmd_inner_replace_selection($textarea, textAreaTxt.substring(spos, spos+1).toUpperCase() + textAreaTxt.substring(spos+1, epos).toLowerCase()); break;
-    default: break;
-    }
-    jsObj.setSelectionRange(spos, epos);
-		$textarea.keyup();
-	};
-
-	function zmd_inner_header($textarea, level) {
-		var text = '';
-		for (var i = 0 ; i < level ; i++) {
-			text += '#';
-		}
-		text += ' ';
-		zmd_inner_insert_linestart($textarea, text);
-	};
-
-  function zmd_inner_replace_selection($textarea, text) {
-    var jsObj = $textarea.get(0);
-    var spos = jsObj.selectionStart, epos = jsObj.selectionEnd;
-    var textAreaTxt = $textarea.val();
-    $textarea.focus();
-    if (document.queryCommandSupported('insertText')) {
-        document.execCommand('insertText', false, text);
-    } else {
-        $textarea.val(textAreaTxt.substring(0, spos) + text + textAreaTxt.substring(epos));
-    }
+  for (var i in actions) {
+    var $item = $(actions[i].item);
+    $item.click(actions[i].action);
+    $actionsBar.append($item);
   }
+}
+
+ZmdEditor.prototype.isNewLineChar = function(ch) {
+  return ch == '\r' || ch == '\n';
+}
+  
+ZmdEditor.prototype.insert = function(preText, sufText) {
+  var textarea = this.textarea, $textarea = $(textarea);
+  var spos = textarea.selectionStart, epos = textarea.selectionEnd;
+  var textAreaTxt = $textarea.val();
+  this.replaceSelection(preText + textAreaTxt.substring(spos, epos) + sufText);
+  textarea.setSelectionRange(spos + preText.length, epos + preText.length);
+  $textarea.keyup();
+};
+  
+ZmdEditor.prototype.insertLineStart = function(text) {
+  var textarea = this.textarea, $textarea = $(textarea);
+  var spos = textarea.selectionStart, epos = textarea.selectionEnd;
+  var textAreaTxt = $textarea.val(); //.replace(/\r\n|\r/g, '\n');
+  
+  var npos = spos;
+  while (npos > 0 && !this.isNewLineChar(textAreaTxt[npos-1])) npos--;
+  
+  textarea.setSelectionRange(npos, npos);
+  this.replaceSelection(text);
+  textarea.setSelectionRange(spos + text.length, epos + text.length);
+
+  $textarea.keyup();
+};
+
+ZmdEditor.prototype.insertList = function(isOrdered) {
+  var textarea = this.textarea, $textarea = $(textarea);
+  var insertCharNums = 0;
+  var spos = textarea.selectionStart, epos = textarea.selectionEnd;
+  var textAreaTxt = $textarea.val();
+    
+  var idx = spos;
+  while (idx > 0 && !isNewLineChar(textAreaTxt[idx-1])) idx--;
+  var npos1 = idx;
+  var resultText = '';
+
+  if (idx == 0) {
+    ++insertCharNums;
+    resultText += isOrdered ? insertCharNums + '. ' : '- ';
+    resultText += textAreaTxt[idx];
+    idx++;
+  }
+  while (idx < epos) {
+    if (!isNewLineChar(textAreaTxt[idx]) && isNewLineChar(textAreaTxt[idx-1])) {
+      ++insertCharNums;
+      resultText += isOrdered ? insertCharNums + '. ' : '- ';
+    }
+    resultText += textAreaTxt[idx];
+    idx++;
+  }
+  var npos2 = idx;
+
+  textarea.setSelectionRange(npos1, npos2);
+  replaceSelection(resultText);
+  textarea.setSelectionRange(spos + (isOrdered ? 3 : 2), epos + insertCharNums * (isOrdered ? 3 : 2));
+  $textarea.keyup();
+};
+
+/**
+ * mode = 1: toUpper; mode = 2: toLower; mode = 3: first toUpper
+ */
+ZmdEditor.prototype.selectionCase = function(mode) {
+  var textarea = this.textarea, $textarea = $(textarea);
+  var spos = textarea.selectionStart, epos = textarea.selectionEnd;
+  var textAreaTxt = $textarea.val();
+  switch (mode) {
+  case 1: replaceSelection(textAreaTxt.substring(spos, epos).toUpperCase()); break;
+  case 2: replaceSelection(textAreaTxt.substring(spos, epos).toLowerCase()); break;
+  case 3: replaceSelection(textAreaTxt.substring(spos, spos+1).toUpperCase() + textAreaTxt.substring(spos+1, epos).toLowerCase()); break;
+  default: break;
+  }
+  textarea.setSelectionRange(spos, epos);
+  $textarea.keyup();
+};
+
+ZmdEditor.prototype.header = function(level) {
+  var text = '';
+  for (var i = 0 ; i < level ; i++) {
+    text += '#';
+  }
+  text += ' ';
+  this.insertLineStart(text);
+};
+
+ZmdEditor.prototype.replaceSelection = function(text) {
+  var textarea = this.textarea, $textarea = $(textarea);
+  var spos = textarea.selectionStart, epos = textarea.selectionEnd;
+  var textAreaTxt = $textarea.val();
+  $textarea.focus();
+  if (document.queryCommandSupported('insertText')) {
+      document.execCommand('insertText', false, text);
+  } else {
+      $textarea.val(textAreaTxt.substring(0, spos) + text + textAreaTxt.substring(epos));
+  }
+}
+
+$.fn.zmdEditor = function(options) {
+	new ZmdEditor($(this), options)
 }
 

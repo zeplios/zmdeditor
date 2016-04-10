@@ -118,7 +118,20 @@ marked.js的扩展，综合Editor.md（https://pandao.github.io/editor.md/）和
 
 依赖：
 
+jquery >= 1.9
+
 [Raphael.js](https://github.com/DmitryBaranovskiy/raphael)
 
 [highlight](https://highlightjs.org/ "highlight")
+
+[squenceDiagram](http://bramp.github.io/js-sequence-diagrams/)
+
+[printArea](https://github.com/RitsC/PrintArea)
+
+[公式使用参考](https://meta.wikimedia.org/wiki/Help:Displaying_a_formula)
+
+[Katex](https://github.com/Khan/KaTeX)
+
+[各种图](https://github.com/knsv/mermaid)
+
 

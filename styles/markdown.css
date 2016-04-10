@@ -83,6 +83,7 @@
 	height: 100%;
 	padding: 10px;
 	margin-top: 5px;
+	margin-bottom: 20px;
     border-radius: 5px;
     font-size: 14px;
     line-height: 1.42857143;
@@ -118,7 +119,7 @@
 	margin: 5px 0px;
 }
 
-.zmd-outer-content .katex {
+.zmd-outer-content>.katex {
 	width: 100%;
 	text-align: center;
 	margin: 5px auto;
@@ -187,7 +188,6 @@
 }
 
 .zmd-outer-content code {
-    padding: 2px 4px;
     font-size: 90%;
     color: #c7254e;
     background-color: #f9f2f4;
