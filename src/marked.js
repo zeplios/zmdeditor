@@ -27,8 +27,9 @@ var block = {
   text: /^[^\n]+/, 
   handseq: /^ *`{3}\s*handseq\s+([\s\S]+?)`{3}/, 
   flowchart: /^ *`{3}\s*flowChart\s+([\s\S]+?)`{3}/, 
-  katex: /^ *`{3}\s*katex\s+([\s\S]+?)`{3}/, 
-  mermaid: /^ *`{3}\s([\s\S]+?)`{3}/
+  katex: /^ *`{3}\s*math\s+([\s\S]+?)`{3}/, 
+  mermaid: /^ *`{3}\s([\s\S]+?)`{3}/,
+  bootalert: /^ *:{3}\s*([^\s]+)\s*([\s\S]+?):{3}/
 };
 
 block.bullet = /(?:[*+-]|\d+\.)/;
@@ -205,11 +206,20 @@ Lexer.prototype.token = function(src, top, bq) {
     }
 
     if (cap = this.rules.mermaid.exec(src)) {
-      console.log(cap[1]);
       src = src.substring(cap[0].length);
       this.tokens.push({
         type: 'mermaid',
         text: cap[1]
+      });
+      continue;
+    }
+
+    if (cap = this.rules.bootalert.exec(src)) {
+      src = src.substring(cap[0].length);
+      this.tokens.push({
+        type: 'bootalert',
+        style: cap[1],
+        text: cap[2]
       });
       continue;
     }
@@ -503,7 +513,8 @@ var inline = {
   strong: /^__([\s\S]+?)__(?!_)|^\*\*([\s\S]+?)\*\*(?!\*)/,
   mark: /^==([\s\S]+?)==(?!=)/,
   underline: /^\+\+([\s\S]+?)\+\+(?!\+)/,
-  em: /^\b_((?:[^_]|__)+?)_\b|^\*((?:\*\*|[\s\S])+?)\*(?!\*)/,
+  em: /^\b_((?:[^_]|__)+?)_|^\*((?:\*\*|[\s\S])+?)\*(?!\*)/,
+  math: /^`\$([^\$]+)\$`/,
   code: /^(`+)\s*([\s\S]*?[^`])\s*\1(?!`)/,
   br: /^ {2,}\n(?!\s*$)/,
   del: noop,
@@ -719,6 +730,13 @@ InlineLexer.prototype.output = function(src) {
       continue;
     }
 
+    // math
+    if (cap = this.rules.math.exec(src)) {
+      src = src.substring(cap[0].length);
+      out += this.renderer.math(cap[1]);
+      continue;
+    }
+
     // code
     if (cap = this.rules.code.exec(src)) {
       src = src.substring(cap[0].length);
@@ -931,6 +949,14 @@ Renderer.prototype.br = function() {
   return this.options.xhtml ? '<br/>' : '<br>';
 };
 
+Renderer.prototype.math = function(text) {
+  try {
+    return katex.renderToString(text);
+  } catch (e) {
+    return text;
+  }
+};
+
 Renderer.prototype.del = function(text) {
   return '<del>' + text + '</del>';
 };
@@ -961,10 +987,25 @@ Renderer.prototype.link = function(href, title, text) {
 };
 
 Renderer.prototype.image = function(href, title, text) {
+  var cap = /(?:\/([\s\S]+)\/)?\s*(?:w:(\d+))?\s*(?:h:(\d+))?\s*(?:w:(\d+))?/.exec(title);
+  var width, height;
+  if (cap && cap[0].length > 0) {
+    title = cap[1];
+    width = cap[2] || cap[4];
+    height = cap[3];
+  }
   var out = '<img src="' + href + '" alt="' + text + '"';
   if (title) {
     out += ' title="' + title + '"';
   }
+  out += ' style="';
+  if (width) {
+    out += 'width:' + width + 'px;';
+  }
+  if (height) {
+    out += 'height:' + height + 'px;';
+  }
+  out += '"';
   out += this.options.xhtml ? '/>' : '>';
   return out;
 };
@@ -1034,6 +1075,10 @@ Renderer.prototype.mermaid = function(text) {
   return '<div class="mermaid">'+text+'</div>'
 }
 
+Renderer.prototype.bootalert = function(style, text) {
+  return '<div class="alert alert-' + style + '">'+text+'</div>'
+}
+
 Renderer.prototype.katex = function(text) {
   try {
     var items = text.split(/\n{2,}/);
@@ -1045,7 +1090,6 @@ Renderer.prototype.katex = function(text) {
   } catch (e) {
     return text;
   }
-  
 }
 // ================================================= end
 
@@ -1239,6 +1283,9 @@ Parser.prototype.tok = function() {
   }
     case 'mermaid': {
       return this.renderer.mermaid(this.token.text);
+  }
+    case 'bootalert': {
+      return this.renderer.bootalert(this.token.style, this.inline.output(this.token.text));
   }
     // ======================================== end
   }
@@ -1471,7 +1518,7 @@ function ZmdEditor($this, options) {
   var _this = this;
 
   var $actionsBar = $('<div id="zmd-inner-actions" class="zmd-inner-actions"></div>');
-  this.fillActions($actionsBar);
+  this.fillActions($actionsBar, options.actions);
   
   $this.append($actionsBar);
   $this.append($centerContent);
@@ -1483,10 +1530,17 @@ function ZmdEditor($this, options) {
         return hljs.highlightAuto(code).value;
     },
   });
+
+  var renderTimeout;
   $textarea.on('keyup', function() {
     _this.typedSomething = true;
-    $preview.html(marked($(this).val()));
-    mermaid.init(undefined, ".mermaid");
+    clearTimeout(renderTimeout);
+    renderTimeout = setTimeout(function(){
+      var scrollTop = _this.preview.scrollTop;
+      $preview.html(marked($textarea.val()));
+      mermaid.init(undefined, ".mermaid");
+      _this.preview.scrollTop = scrollTop;
+    }, 1000);
   });
 }
 
@@ -1506,154 +1560,163 @@ ZmdEditor.prototype.initScroll = function() {
       _this.typedSomething = false;
     }, timeout);  // time for marked render
   });
-  $(preview).scroll(function() {
+  /*$(preview).scroll(function() {
     var per = (preview.scrollTop - previewScrollTop) / (preview.scrollHeight - preview.clientHeight);
     textarea.scrollTop = per * (textarea.scrollHeight - textarea.clientHeight) + contentScrollTop;
     contentScrollTop = textarea.scrollTop;
     previewScrollTop = preview.scrollTop;
-  });
+  });*/
 }
 
-ZmdEditor.prototype.fillActions = function($actionsBar) {
+ZmdEditor.prototype.fillActions = function($actionsBar, optActions) {
   var _this = this;
   var actions = [];
   actions.push({
-    item: '<button><i class="material-icons" title="粗体">format_bold</i></button>', 
+    item: '<i class="material-icons" title="粗体">format_bold</i>', 
     action: function() { _this.insert("**", "**"); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="斜体">format_italic</i></button>', 
+    item: '<i class="material-icons" title="斜体">format_italic</i>', 
     action: function() { _this.insert("*", "*"); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="删除线">format_strikethrough</i></button>', 
+    item: '<i class="material-icons" title="删除线">format_strikethrough</i>', 
     action: function() { _this.insert("~~", "~~"); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="下划线">format_underlined</i></button>', 
+    item: '<i class="material-icons" title="下划线">format_underlined</i>', 
     action: function() { _this.insert("++", "++"); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="高亮">highlight</i></button>', 
+    item: '<i class="material-icons" title="高亮">highlight</i>', 
     action: function() { _this.insert("==", "=="); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="引用">format_quote</i></button>', 
+    item: '<i class="material-icons" title="引用">format_quote</i>', 
     action: function() { _this.insert("\n>", ""); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="行内代码">code</i></button>', 
+    item: '<i class="material-icons" title="行内代码">code</i>', 
     action: function() { _this.insert("`", "`"); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="代码块">developer_mode</i></button>', 
+    item: '<i class="material-icons" title="代码块">developer_mode</i>', 
     action: function() { _this.insertLineStart("    "); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="表格">grid_on</i></button>', 
+    item: '<i class="material-icons" title="表格">grid_on</i>', 
     action: function() { _this.insert("\nheader 1 | header 2\n---|---\nrow 1 col 1 | row 1 col 2\nrow 2 col 1 | row 2 col 2\n\n", ""); }
   });
 
   actions.push({
-    item: '<button><span title="仅首字母大写">Aa</span></button>', 
+    item: '<span title="仅首字母大写">Aa</span>', 
     action: function() { _this.selectionCase(3); }
   });
 
   actions.push({
-    item: '<button><span title="选中部分全部转为大写">AA</span></button>', 
+    item: '<span title="选中部分全部转为大写">AA</span>', 
     action: function() { _this.selectionCase(1); }
   });
 
   actions.push({
-    item: '<button><span title="选中部分全部转为小写">aa</span></button>', 
+    item: '<span title="选中部分全部转为小写">aa</span>', 
     action: function() { _this.selectionCase(2); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title=插入图片">insert_photo</i></button>', 
+    item: '<i class="material-icons" title="插入图片">insert_photo</i>', 
     action: function() { _this.insert("![image](https://github.com/fluidicon.png)", ""); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title=h1">looks_one</i></button>', 
+    item: '<i class="material-icons" title=h1">looks_one</i>', 
     action: function() { _this.header(1); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title=h2">looks_two</i></button>', 
+    item: '<i class="material-icons" title=h2">looks_two</i>', 
     action: function() { _this.header(2); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title=h3">looks_3</i></button>', 
+    item: '<i class="material-icons" title=h3">looks_3</i>', 
     action: function() { _this.header(3); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title=h4">looks_4</i></button>', 
+    item: '<i class="material-icons" title=h4">looks_4</i>', 
     action: function() { _this.header(4); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title=h5">looks_5</i></button>', 
+    item: '<i class="material-icons" title=h5">looks_5</i>', 
     action: function() { _this.header(5); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title=h6">looks_6</i></button>', 
+    item: '<i class="material-icons" title=h6">looks_6</i>', 
     action: function() { _this.header(6); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="横线">remove</i></button>', 
+    item: '<i class="material-icons" title="横线">remove</i>', 
     action: function() { _this.insert("\n---\n", ""); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="超链接">insert_link</i></button>', 
+    item: '<i class="material-icons" title="超链接">insert_link</i>', 
     action: function() { _this.insert('[example]("http://example.org")', ''); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="无序列表">format_list_bulleted</i></button>', 
+    item: '<i class="material-icons" title="无序列表">format_list_bulleted</i>', 
     action: function() { _this.insertList(false); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="有序列表">format_list_numbered</i></button>', 
+    item: '<i class="material-icons" title="有序列表">format_list_numbered</i>', 
     action: function() { _this.insertList(true); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="数学公式">functions</i></button>', 
-    action: function() { _this.insert('```\nkatex\nc = \\pm\\sqrt{a^2 + b^2}\n```\n', ''); }
+    item: '<i class="material-icons" title="数学公式">functions</i>', 
+    action: function() { _this.insert('```\nmath\nc = \\pm\\sqrt{a^2 + b^2}\n```\n', ''); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="流程图">show_chart</i></button>', 
-    action: function() { _this.insert('```\nflowChart\nst=>start: Start:>http://www.google.com[blank]\ne=>end:>http://www.google.com\nop1=>operation: My Operation\nsub1=>subroutine: My Subroutine\ncond=>condition: Yes or No?:>http://www.google.com\nio=>inputoutput: catch something...\n\nst->op1->cond\ncond(yes)->io->e\ncond(no)->sub1(right)->op1\n```\n', ''); }
+    item: '<i class="material-icons" title="流程图">show_chart</i>', 
+    // action: function() { _this.insert('```\nflowChart\nst=>start: Start:>http://www.google.com[blank]\ne=>end:>http://www.google.com\nop1=>operation: My Operation\nsub1=>subroutine: My Subroutine\ncond=>condition: Yes or No?:>http://www.google.com\nio=>inputoutput: catch something...\n\nst->op1->cond\ncond(yes)->io->e\ncond(no)->sub1(right)->op1\n```\n', ''); }
+    action: function() { _this.insert('```\ngraph TD;\n    A-->B;\n    A-->C;\n    B-->D;\n    C-->D;\n```\n', ''); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="时序图">short_text</i></button>', 
-    action: function() { _this.insert('```\nhandseq\nA->>C: How are you?\nB->>A: Great!\n```\n', ''); }
+    item: '<i class="material-icons" title="时序图">short_text</i>', 
+    // action: function() { _this.insert('```\nhandseq\nA->>C: How are you?\nB->>A: Great!\n```\n', ''); }
+    action: function() { _this.insert('```\nsequenceDiagram\n    participant John\n    participant Alice\n    Alice->>John: Hello John, how are you?\n    John-->>Alice: Great!\n```\n', ''); }
   });
 
   actions.push({
-    item: '<button><i class="material-icons" title="甘特图" onclick="alert(\'not supported\');">tune</i></button>', 
-    action: function() {  }
+    item: '<i class="material-icons" title="甘特图">tune</i>', 
+    action: function() { _this.insert('```\ngantt\n    title A Gantt Diagram\n\n    section Section\n    A task           :a1, 2014-01-01, 30d\n \
+    Another task     :after a1  , 20d\n    section Another\n    Task in sec      :2014-01-12  , 12d\n    anther task      : 24d\n```\n', ''); }
   });
 
+  if (Array.isArray(optActions)) {
+    for (var i = 0 ; i < optActions.length ; i++) {
+      actions.push(optActions[i]);
+    }
+  }
+
   actions.push({
-    item: '<button><i class="material-icons" title="下载PDF">file_download</i></button>', 
+    item: '<i class="material-icons" title="下载PDF">file_download</i>', 
     action: function() { 
       $print = $('<div class="zmd-outer-content"></div>');
       $print.html($(_this.preview).html());
@@ -1672,8 +1735,11 @@ ZmdEditor.prototype.fillActions = function($actionsBar) {
   });
 
   for (var i in actions) {
-    var $item = $(actions[i].item);
-    $item.click(actions[i].action);
+    if (!actions[i].item || !actions[i].action) {
+      continue;
+    }
+    var $item = $('<button type="button" idx="' + i + '">' + actions[i].item + '</button>');
+    $item.click(function(){actions[$(this).attr('idx')].action(_this);});
     $actionsBar.append($item);
   }
 }
@@ -1778,6 +1844,10 @@ ZmdEditor.prototype.replaceSelection = function(text) {
 }
 
 $.fn.zmdEditor = function(options) {
-	new ZmdEditor($(this), options)
+	return new ZmdEditor($(this), options)
 }
 
+$.fn.renderMarked = function(text) {
+  $(this).html(marked(text));
+  mermaid.init(undefined, ".mermaid");
+}

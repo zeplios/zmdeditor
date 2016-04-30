@@ -72,18 +72,22 @@
 }
 
 .zmd-inner-editor {
+    min-height: 200px;
 	width: 100%;
-	height: 100%;
+	height: 90%;
 	font-family: "Helvetica Neue", Helvetica, Microsoft Yahei, Hiragino Sans GB, WenQuanYi Micro Hei, sans-serif;
 }
 
+.zmd-inner-editor>* {
+    float: left;
+    min-height: 180px;
+    width: 50%;
+    height: 100%;
+}
+
 .zmd-inner-content {
-	float: left;
-	width: 50%;
-	height: 100%;
 	padding: 10px;
 	margin-top: 5px;
-	margin-bottom: 20px;
     border-radius: 5px;
     font-size: 14px;
     line-height: 1.42857143;
@@ -99,14 +103,16 @@
 }
 
 .zmd-outer-content {
-	float: left;
-	width: 50%;
-	height: 100%;
 	padding: 10px;
 	margin-top: 5px;
-	overflow: auto;
+	overflow-y: auto;
+	overflow-x: hidden;
 	border: #ccc 2px solid;
     border-radius: 5px;
+}
+
+.zmd-outer-content>* {
+	overflow-x: auto;
 }
 
 /* 
@@ -142,14 +148,6 @@
   border-collapse: collapse;
 }
 
-/*.zmd-inner-preview table>caption+thead>tr:first-child>td, .zmd-outer-content table>caption+thead>tr:first-child>td, 
-.zmd-inner-preview table>caption+thead>tr:first-child>th, .zmd-outer-content table>caption+thead>tr:first-child>th, 
-.zmd-inner-preview table>colgroup+thead>tr:first-child>td, .zmd-outer-content table>colgroup+thead>tr:first-child>td, 
-.zmd-inner-preview table>colgroup+thead>tr:first-child>th, .zmd-outer-content table>colgroup+thead>tr:first-child>th, 
-.zmd-inner-preview table>thead:first-child>tr:first-child>td, .zmd-outer-content table>thead:first-child>tr:first-child>td, 
-.zmd-inner-preview table>thead:first-child>tr:first-child>th, .zmd-outer-content table>thead:first-child>tr:first-child>th {
-  border-top: 0;
-}*/
 .zmd-outer-content table>thead>tr>th {
   vertical-align: bottom;
   border-bottom: 2px solid #ddd;
@@ -177,18 +175,16 @@
     display: block;
     padding: 9.5px;
     margin: 0 0 10px;
-    font-size: 13px;
     line-height: 1.42857143;
     color: #333;
     word-break: break-all;
     word-wrap: break-word;
     background-color: #f5f5f5;
-    border: 1px solid #ccc;
+    /* border: 1px solid #ccc; */
     border-radius: 4px;
 }
 
 .zmd-outer-content code {
-    font-size: 90%;
     color: #c7254e;
     background-color: #f9f2f4;
     border-radius: 4px;
@@ -196,8 +192,58 @@
 }
 
 .zmd-outer-content pre code {
+	width: 100%;
 	color: #333;
 	background: transparent;
+}
+
+/**
+ *=========================================================
+ * mermaid
+ *=========================================================
+ */
+.edgeLabel {
+	background:rgba(255, 255, 255, 0.8);
+    filter:Alpha(opacity=80);
+}
+.mermaid .label {
+	font-family: "Raleway", Helvetica, Arial, sans-serif;
+}
+
+/**
+ *=========================================================
+ * copied from bootstrap
+ *=========================================================
+ */
+.alert {
+    padding: 15px;
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+.alert-success {
+    color: #3c763d;
+    background-color: #dff0d8;
+    border-color: #d6e9c6;
+}
+
+.alert-info {
+    color: #31708f;
+    background-color: #d9edf7;
+    border-color: #bce8f1;
+}
+
+.alert-warning {
+    color: #8a6d3b;
+    background-color: #fcf8e3;
+    border-color: #faebcc;
+}
+
+.alert-danger {
+    color: #a94442;
+    background-color: #f2dede;
+    border-color: #ebccd1;
 }
 
 /* 
@@ -211,11 +257,11 @@
 	font-family: 'Material Icons';
 	font-style: normal;
 	font-weight: 400;
-	src: url(MaterialIcons-Regular.eot); /* For IE6-8 */
+	src: url(../fonts/MaterialIcons-Regular.eot); /* For IE6-8 */
 	src: local('Material Icons'), local('MaterialIcons-Regular'),
-		url(MaterialIcons-Regular.woff2) format('woff2'),
-		url(MaterialIcons-Regular.woff) format('woff'),
-		url(MaterialIcons-Regular.ttf) format('truetype');
+		url(../fonts/MaterialIcons-Regular.woff2) format('woff2'),
+		url(../fonts/MaterialIcons-Regular.woff) format('woff'),
+		url(../fonts/MaterialIcons-Regular.ttf) format('truetype');
 }
 
 .material-icons {
@@ -239,4 +285,46 @@
 	-moz-osx-font-smoothing: grayscale;
 	/* Support for IE. */
 	font-feature-settings: 'liga';
+}
+
+/* =========================================================== */
+@font-face {
+    font-family: 'Raleway';
+    src: url('../fonts/raleway-light-webfont.eot');
+    src: url('../fonts/raleway-light-webfont.eot?#iefix') format('embedded-opentype'),
+        url('../fonts/raleway-light-webfont.woff2') format('woff2'),
+        url('../fonts/raleway-light-webfont.woff') format('woff'),
+        url('../fonts/raleway-light-webfont.ttf') format('truetype');
+    font-weight: 100;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'Raleway';
+    src: url('../fonts/raleway-regular-webfont.eot');
+    src: url('../fonts/raleway-regular-webfont.eot?#iefix') format('embedded-opentype'),
+        url('../fonts/raleway-regular-webfont.woff2') format('woff2'),
+        url('../fonts/raleway-regular-webfont.woff') format('woff'),
+        url('../fonts/raleway-regular-webfont.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'Raleway';
+    src: url('../fonts/raleway-semibold-webfont.eot');
+    src: url('../fonts/raleway-semibold-webfont.eot?#iefix') format('embedded-opentype'),
+        url('../fonts/raleway-semibold-webfont.woff2') format('woff2'),
+        url('../fonts/raleway-semibold-webfont.woff') format('woff'),
+        url('../fonts/raleway-semibold-webfont.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'Raleway';
+    src: url('../fonts/raleway-bold-webfont.eot');
+    src: url('../fonts/raleway-bold-webfont.eot?#iefix') format('embedded-opentype'),
+        url('../fonts/raleway-bold-webfont.woff2') format('woff2'),
+        url('../fonts/raleway-bold-webfont.woff') format('woff'),
+        url('../fonts/raleway-bold-webfont.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
 }

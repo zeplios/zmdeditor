@@ -21,9 +21,10 @@ marked.js的扩展，综合Editor.md（https://pandao.github.io/editor.md/）和
 
 2. 粗体
 
-    加粗，前后各用两个`*`(`-`等效，一般用`*`)包裹，效果：**加粗**。如下：
+    加粗，前后各用两个`*`(`_`等效，一般用`*`)包裹，效果：**加粗**。如下：
 
         **这里是加粗文字**
+        __这里也是加粗文字__
 
 3. 删除线
 
@@ -33,13 +34,22 @@ marked.js的扩展，综合Editor.md（https://pandao.github.io/editor.md/）和
 
 4. 下划线
 
-    待补充
+    前后各用两个+包裹的是下划线效果，如下：
+
+        ++这里是下划线的内容++
 
 5. 高亮显示
 
     在文本前后各添加两个=，本文会被高亮显示：
 
         ==这里是高亮显示的文本==
+
+5. 斜体
+
+    文本前后各用一个`_`或`*`包裹是斜体效果：
+
+        _这里是斜体的文本_
+        *这里是斜体的文本*
 
 5. 引用
 
@@ -72,7 +82,10 @@ marked.js的扩展，综合Editor.md（https://pandao.github.io/editor.md/）和
 
         ![image](https://github.com/fluidicon.png)
 
-    如果要规定图片的大小
+    如果要规定图片的大小，markdown标准里面本身没有指定图片大小的设计，所以我自己制定了一个标准，如果有更好的方式，请联系我~，我的标准就是在url后面加上用引号引起来三个元素，两个斜杠包裹title，w:20制定20px宽，h:40制定40px高，元素之间可以有空格，也可以没有，如：
+
+        ![image](https://github.com/fluidicon.png "/this is title/w:20h:40")
+        ![image](https://github.com/fluidicon.png "/this is/ w:20")
 
 10. 插入分割线
 
@@ -125,6 +138,8 @@ jquery >= 1.9
 [highlight](https://highlightjs.org/ "highlight")
 
 [squenceDiagram](http://bramp.github.io/js-sequence-diagrams/)
+
+[flowChart](https://github.com/adrai/flowchart.js)
 
 [printArea](https://github.com/RitsC/PrintArea)
 

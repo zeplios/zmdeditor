@@ -5,24 +5,32 @@
 ##### 标题5
 ###### 标题6
 
-**这里是加粗文字**
+这里是**加粗**文字
 
-~~这里是删除线的内容~~
+这里也是__加粗__文字
 
-++里是下划线的内容++
+这里是~~删除线~~的内容
+
+++下划线++内容
+
+这里是==高亮==显示的文本
+
+这是_斜体_
+
+这也是*斜体*
 
  > 这里是引用的名人名言
 
 这里的`inline code`是行内代码
 
-    只要把某段的缩进比正文多4个字符，这段文字就变成代码块，本文档所有使用例子都是作为代码块出现的。
+    indent for 4 chars, this will be a code block
 
 th1 | th2 | th3
 ---|---:|:---
 tr1td1a | tr1td2 | tr1td3c
 tr2td1 | tr2td2b | tr2td3
 
-![image](https://github.com/fluidicon.png)
+快来看github ![image](https://github.com/fluidicon.png "/this is title/ w:40")
 
 ---
 
@@ -32,3 +40,11 @@ tr2td1 | tr2td2b | tr2td3
     * 子项3
 + 无序列表项2
 * 无序列表项3
+
+<zhfchdev@gmail.com>
+
+[链接名](<http://www.leaffork.com> "LEAFFORK")
+
+[hello](#new)
+
+页内链接需要自定义一个锚点 <div id="new"></div>
